@@ -88,7 +88,3 @@ export async function storeUserTodoistToken(userId: string, todoistToken: string
   });
 }
 
-await prisma.user.findUnique({
-  where: { email: user.email }
-});
-
