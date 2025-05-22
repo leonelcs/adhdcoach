@@ -1,7 +1,6 @@
-import { prisma } from './prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
+import { prisma } from "./prisma";
 
 const TODOIST_API_BASE = 'https://api.todoist.com/rest/v2';
 
@@ -11,7 +10,7 @@ async function getUserToken() {
   if (!session?.user?.id) {
     throw new Error("Not authenticated");
   }
-  
+
   const todoistToken = await prisma.todoistToken.findUnique({
     where: { userId: session.user.id }
   });
@@ -20,7 +19,7 @@ async function getUserToken() {
   if (!token) {
     throw new Error("No Todoist token available");
   }
-  
+
   return { token, userId: session.user.id };
 }
 
@@ -88,4 +87,8 @@ export async function storeUserTodoistToken(userId: string, todoistToken: string
     create: { userId, token: todoistToken }
   });
 }
+
+await prisma.user.findUnique({
+  where: { email: user.email }
+});
 
