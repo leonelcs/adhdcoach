@@ -1,58 +1,106 @@
 import { GET } from './route'; // Adjusted path to be relative to the test file
 import { getServerSession } from 'next-auth/next';
 import { NextRequest } from 'next/server';
-// NextResponse is not strictly needed for this test but good for consistency if other tests are added
-// import { NextResponse } from 'next/server';
-import { getTasks } from '@/lib/todoist'; // Make sure this path is correct
+import { getTasks } from '@/lib/todoist';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Import for assertion
 
 // Mock next-auth/next
 jest.mock('next-auth/next', () => ({
   getServerSession: jest.fn(),
 }));
 
-// Mock authOptions from the actual path
-// It's important to mock the module from where authOptions is imported in the route
+// Mock authOptions - this is already done by the previous jest.mock,
+// but we might want to ensure it's typed if we use it directly in tests.
+// For now, the existing mock of the module is fine.
 jest.mock('@/app/api/auth/[...nextauth]/route', () => ({
-  authOptions: {}, // Provide a dummy authOptions object
+  authOptions: { secret: 'mock_secret' }, // Provide a dummy authOptions object
 }));
+
 
 // Mock @/lib/todoist
 jest.mock('@/lib/todoist', () => ({
   getTasks: jest.fn(),
 }));
 
+// Typed mocks
+const mockedGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+const mockedGetTasks = getTasks as jest.MockedFunction<typeof getTasks>;
 
 describe('GET /api/todoist', () => {
+  beforeEach(() => {
+    // Reset mocks before each test
+    mockedGetServerSession.mockReset();
+    mockedGetTasks.mockReset();
+  });
+
   it('should return 401 if user is not authenticated', async () => {
-    // Arrange
-    (getServerSession as jest.Mock).mockResolvedValue(null);
-
-    // Act
-    // The GET handler in question does not expect a Request object.
-    // If it did, we would pass {} as NextRequest or a more detailed mock.
-    const response = await GET();
-
-    // Assert
+    mockedGetServerSession.mockResolvedValue(null);
+    const request = new Request('http://localhost/api/todoist');
+    
+    const response = await GET(request);
+    
     expect(response.status).toBe(401);
     const body = await response.json();
     expect(body).toEqual({ error: 'Unauthorized' });
+    expect(mockedGetServerSession).toHaveBeenCalledWith(authOptions);
+    expect(mockedGetTasks).not.toHaveBeenCalled();
   });
 
-  it('should return 200 and tasks if user is authenticated', async () => {
-    // Arrange
-    const mockSession = { user: { email: 'test@example.com', name: 'Test User' } };
-    (getServerSession as jest.Mock).mockResolvedValue(mockSession);
+  describe('when user is authenticated', () => {
+    const mockSession = { user: { id: 'test-user-id', email: 'test@example.com', name: 'Test User' } };
+    const sampleTasks = [{ id: '1', content: 'Buy milk' }];
 
-    const mockTasks = [{ id: '1', content: 'Buy milk', completed: false }];
-    (getTasks as jest.Mock).mockResolvedValue(mockTasks);
+    beforeEach(() => {
+      mockedGetServerSession.mockResolvedValue(mockSession);
+    });
 
-    // Act
-    const response = await GET(); // Pass a minimal mock request, GET handler does not take any argument
+    it('should call getTasks with "active" filter and return tasks', async () => {
+      mockedGetTasks.mockResolvedValue(sampleTasks);
+      const request = new Request('http://localhost/api/todoist?filter=active');
+      
+      const response = await GET(request);
+      
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toEqual(sampleTasks);
+      expect(mockedGetServerSession).toHaveBeenCalledWith(authOptions);
+      expect(mockedGetTasks).toHaveBeenCalledWith('active');
+    });
 
-    // Assert
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual(mockTasks);
-    expect(getTasks).toHaveBeenCalledTimes(1); // Verify getTasks was called
+    it('should call getTasks with undefined if no filter is provided', async () => {
+      mockedGetTasks.mockResolvedValue(sampleTasks);
+      const request = new Request('http://localhost/api/todoist');
+      
+      const response = await GET(request);
+      
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toEqual(sampleTasks);
+      expect(mockedGetTasks).toHaveBeenCalledWith(undefined);
+    });
+
+    it('should call getTasks with the provided filter string', async () => {
+      mockedGetTasks.mockResolvedValue(sampleTasks);
+      const request = new Request('http://localhost/api/todoist?filter=pending');
+      
+      const response = await GET(request);
+      
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toEqual(sampleTasks);
+      expect(mockedGetTasks).toHaveBeenCalledWith('pending');
+    });
+
+    it('should return 500 if getTasks throws an error', async () => {
+      mockedGetTasks.mockRejectedValue(new Error('Failed to fetch'));
+      const request = new Request('http://localhost/api/todoist?filter=active');
+      
+      const response = await GET(request);
+      
+      expect(response.status).toBe(500);
+      const body = await response.json();
+      expect(body).toEqual({ error: 'Failed to fetch tasks' });
+      expect(mockedGetTasks).toHaveBeenCalledWith('active');
+    });
   });
 });
