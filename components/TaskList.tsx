@@ -4,11 +4,21 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import TaskItem from './TaskItem';
+import { completeTask } from '@/lib/todoist';
+
+interface Task {
+  id: string;
+  content: string;
+  priority: number;
+  due?: {
+    date: string;
+  };
+}
 
 export default function TaskList() {
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -48,6 +58,18 @@ export default function TaskList() {
     fetchTasks();
   }, [status, router]);
 
+  const handleComplete = async (id: string) => {
+    try {
+      await completeTask(id);
+      // Refresh tasks after completing one
+      const response = await fetch('/api/todoist');
+      const data = await response.json();
+      setTasks(data);
+    } catch (error) {
+      console.error('Failed to complete task:', error);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return <div className="py-10 text-center">Loading tasks...</div>;
   }
@@ -71,12 +93,21 @@ export default function TaskList() {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-800">Your Tasks</h2>
-      <div className="space-y-3">
-        {tasks.map(task => (
-          <TaskItem key={task.id} task={task} />
-        ))}
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      <div className="divide-y divide-gray-200">
+        {tasks.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">
+            No tasks available
+          </div>
+        ) : (
+          tasks.map(task => (
+            <TaskItem 
+              key={task.id} 
+              task={task} 
+              onComplete={handleComplete} 
+            />
+          ))
+        )}
       </div>
     </div>
   );
