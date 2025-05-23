@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth";
+import { Session } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "./prisma";
 
 const TODOIST_API_BASE = 'https://api.todoist.com/rest/v2';
 
 // Helper to get the token for the current user
-async function getUserToken() {
-  const session = await getServerSession(authOptions);
+export async function getUserToken(session: Session | null) {
   if (!session?.user?.id) {
     throw new Error("Not authenticated");
   }
@@ -23,8 +22,8 @@ async function getUserToken() {
   return { token, userId: session.user.id };
 }
 
-export async function getTasks(): Promise<TodoistTask[]> {
-  const { token } = await getUserToken();
+export async function getTasks(session: Session | null): Promise<TodoistTask[]> {
+  const { token } = await getUserToken(session);
   
   const response = await fetch(`${TODOIST_API_BASE}/tasks`, {
     headers: {
@@ -41,8 +40,8 @@ export async function getTasks(): Promise<TodoistTask[]> {
 }
 
 // Other Todoist API functions with authentication...
-export async function completeTask(taskId: string): Promise<void> {
-  const { token } = await getUserToken();
+export async function completeTask(taskId: string, session: Session | null): Promise<void> {
+  const { token } = await getUserToken(session);
   
   const response = await fetch(`${TODOIST_API_BASE}/tasks/${taskId}/close`, {
     method: 'POST',
@@ -56,8 +55,8 @@ export async function completeTask(taskId: string): Promise<void> {
   }
 }
 
-export async function createTask(content: string, dueString?: string, priority?: number): Promise<TodoistTask> {
-  const { token } = await getUserToken();
+export async function createTask(content: string, session: Session | null, dueString?: string, priority?: number): Promise<TodoistTask> {
+  const { token } = await getUserToken(session);
   
   const response = await fetch(`${TODOIST_API_BASE}/tasks`, {
     method: 'POST',
