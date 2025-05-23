@@ -59,14 +59,24 @@ export default function TaskList() {
   }, [status, router]);
 
   const handleComplete = async (id: string) => {
+    console.log('🔍 TaskList.handleComplete called with id=', id);
+    if (!id) {
+      console.error('❌ TaskList.handleComplete: id is undefined!');
+      return;
+    }
     try {
+      console.log('🚀 TaskList: calling completeTask with', id);
       await completeTask(id);
-      // Refresh tasks after completing one
+      console.log('✅ TaskList: completeTask succeeded for', id);
+
+      // Refresh tasks
       const response = await fetch('/api/todoist');
+      console.log('📥 TaskList: fetched /api/todoist status', response.status);
       const data = await response.json();
+      console.log('📊 TaskList: new tasks array length=', data?.length);
       setTasks(data);
     } catch (error) {
-      console.error('Failed to complete task:', error);
+      console.error('❌ TaskList: Failed to complete task for id=', id, error);
     }
   };
 

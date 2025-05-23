@@ -1,5 +1,7 @@
+'use client';
+
 import React from 'react';
-import { completeTask } from '@/lib/todoist';
+import { completeTaskClient } from '@/lib/todoistClient';
 
 // Priority color mapping (Todoist uses 1-4 with 4 being highest)
 const priorityColors = {
@@ -30,6 +32,8 @@ interface TaskItemProps {
 }
 
 export default function TaskItem({ task, onComplete }: TaskItemProps) {
+  console.log('🔍 TaskItem rendered with task.id=', task.id);
+
   const priorityColor =
     priorityColors[task.priority as keyof typeof priorityColors] ||
     priorityColors[1];
@@ -37,11 +41,13 @@ export default function TaskItem({ task, onComplete }: TaskItemProps) {
     priorityLabels[task.priority as keyof typeof priorityLabels] || 'Normal';
 
   const handleComplete = async () => {
+    console.log('🖱️ TaskItem.handleComplete, sending up id=', task.id);
     try {
-      await completeTask(task.id);
-      onComplete();
+      await completeTaskClient(task.id);
+      console.log('✅ TaskItem: completeTaskClient succeeded for', task.id);
+      onComplete(task.id);
     } catch (error) {
-      console.error('Failed to complete task:', error);
+      console.error('❌ TaskItem: completeTaskClient failed for', task.id, error);
     }
   };
 
