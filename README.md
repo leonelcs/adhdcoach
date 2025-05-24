@@ -40,11 +40,92 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 ```
 
+## 🗄️ Local Database Setup (MySQL with Docker)
+
+Follow these steps to set up your local MySQL database for this project:
+
+### 1. Start MySQL with Docker
+
+Make sure you have Docker installed. Then, from the project root, run:
+
+```sh
+docker-compose up -d
+```
+
 ### 4. Set up MySQL
 
 - Make sure you have a MySQL server running.
 - Create a database for the project.
 - Update your `DATABASE_URL` in `.env.local` with your credentials.
+
+
+### 4.1 How to create your database and provide the correct access to the user
+
+```markdown
+## 🗄️ Local Database Setup (MySQL with Docker)
+
+Follow these steps to set up your local MySQL database for this project:
+
+### 4.1.1. Start MySQL with Docker
+
+Make sure you have Docker installed. Then, from the project root, run:
+
+```sh
+docker-compose up -d
+```
+
+This will start a MySQL server with the correct user, password, and database as defined in your `.env.local`.
+
+---
+
+### 4.1.2. Connect to the MySQL Container as Root
+
+```sh
+docker exec -it adhdcoach-mysql mysql -u root -p
+```
+Enter the root password (`rootpassword` as set in `docker-compose.yml`).
+
+---
+
+### 4.1.3. Create Database and User (if not already created)
+
+Inside the MySQL prompt, run:
+
+```sql
+CREATE DATABASE IF NOT EXISTS adhd_coach;
+CREATE USER IF NOT EXISTS 'adhdcoach'@'%' IDENTIFIED BY 'My:S3cr3t';
+GRANT ALL PRIVILEGES ON *.* TO 'adhdcoach'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+---
+
+### 4.1.4. Test the Connection
+
+From your host machine, test the connection:
+
+```sh
+mysql -u adhdcoach -pMy:S3cr3t -h 127.0.0.1 -P 30306 adhd_coach
+```
+
+---
+
+### 4.1.5. Run Prisma Migrations
+
+Back in your project directory, run:
+
+```sh
+npx prisma migrate dev --name init
+```
+
+This will create the necessary tables as defined in `prisma/schema.prisma`.
+
+---
+
+**Now your local database is ready for development!**
+
+
 
 ### 5. Run Prisma migrations
 

@@ -1,8 +1,11 @@
-import { GET } from './route'; // Adjusted path to be relative to the test file
+import { GET } from './route';
 import { getServerSession } from 'next-auth/next';
-import { NextRequest } from 'next/server';
 import { getTasks } from '@/lib/todoist';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Import for assertion
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+// Only if you get "Request is not defined" error in Jest
+import { Request } from 'node-fetch';
+(global as any).Request = Request;
 
 // Mock next-auth/next
 jest.mock('next-auth/next', () => ({

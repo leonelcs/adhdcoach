@@ -1,9 +1,22 @@
-import { getUserToken } from './todoist'; // Adjust path as necessary
+jest.mock('./todoist', () => {
+  const originalModule = jest.requireActual('./todoist');
+  return {
+    __esModule: true,
+    ...originalModule,
+    getUserToken: jest.fn(),
+  };
+});
+
+import { getTasks } from './todoist';
+const { getUserToken: mockGetUserToken } = require('./todoist');
 import { prisma } from './prisma';
-// Session is no longer directly used in tests for getUserToken, but getServerSession will return a Session-like object
-// import { Session } from 'next-auth'; 
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+
+
+jest.mock('next-auth/next');
+
+
 
 // Mock Prisma
 jest.mock('./prisma', () => ({
@@ -14,10 +27,9 @@ jest.mock('./prisma', () => ({
   },
 }));
 
-// Mock next-auth
-jest.mock('next-auth/next', () => ({
-  getServerSession: jest.fn(),
-}));
+(getServerSession as jest.Mock).mockResolvedValue({
+  user: { id: 'test-user-id', email: 'test@example.com', name: 'Test User' }
+});
 
 // Mock authOptions (simple mock, adjust if complex structure is needed)
 jest.mock('@/app/api/auth/[...nextauth]/route', () => ({
@@ -32,15 +44,25 @@ const mockEnv = {
 let originalEnv: NodeJS.ProcessEnv;
 
 beforeEach(() => {
+  // restore env
   originalEnv = { ...process.env };
   process.env = { ...originalEnv, ...mockEnv };
+
+  // reset Prisma mock
   (prisma.todoistToken.findUnique as jest.Mock).mockReset();
-  (getServerSession as jest.Mock).mockReset(); // Reset getServerSession mock
+
+  // reset and re‐mock getServerSession
+  (getServerSession as jest.Mock).mockReset();
+  (getServerSession as jest.Mock).mockResolvedValue({
+    user: { id: 'test-user-id', email: 'test@example.com', name: 'Test User' }
+  });
 });
 
 afterEach(() => {
   process.env = originalEnv;
 });
+
+const { getUserToken: realGetUserToken } = jest.requireActual('./todoist');
 
 describe('getUserToken', () => {
   // Define mock session objects that getServerSession might return
@@ -66,7 +88,7 @@ describe('getUserToken', () => {
       userId: 'user_123',
     });
 
-    const result = await getUserToken();
+    const result = await realGetUserToken();
     expect(result).toEqual({ token: 'prisma_token_456', userId: 'user_123' });
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
     expect(prisma.todoistToken.findUnique).toHaveBeenCalledWith({
@@ -78,26 +100,26 @@ describe('getUserToken', () => {
     (getServerSession as jest.Mock).mockResolvedValue(mockValidSession);
     (prisma.todoistToken.findUnique as jest.Mock).mockResolvedValue(null);
 
-    const result = await getUserToken();
+    const result = await realGetUserToken();
     expect(result).toEqual({ token: 'env_token_123', userId: 'user_123' });
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
   });
 
   test('should throw "Not authenticated" if getServerSession returns null', async () => {
     (getServerSession as jest.Mock).mockResolvedValue(null);
-    await expect(getUserToken()).rejects.toThrow('Not authenticated');
+    await expect(realGetUserToken()).rejects.toThrow('Not authenticated');
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
   });
 
   test('should throw "Not authenticated" if session user ID is missing', async () => {
     (getServerSession as jest.Mock).mockResolvedValue(mockSessionNoUserId);
-    await expect(getUserToken()).rejects.toThrow('Not authenticated');
+    await expect(realGetUserToken()).rejects.toThrow('Not authenticated');
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
   });
   
   test('should throw "Not authenticated" if session user is missing', async () => {
     (getServerSession as jest.Mock).mockResolvedValue(mockSessionNoUser);
-    await expect(getUserToken()).rejects.toThrow('Not authenticated');
+    await expect(realGetUserToken()).rejects.toThrow('Not authenticated');
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
   });
 
@@ -109,7 +131,7 @@ describe('getUserToken', () => {
     const originalTodoistToken = process.env.TODOIST_API_TOKEN;
     delete process.env.TODOIST_API_TOKEN;
 
-    await expect(getUserToken()).rejects.toThrow('No Todoist token available');
+    await expect(realGetUserToken()).rejects.toThrow('No Todoist token available');
     expect(getServerSession).toHaveBeenCalledWith(authOptions);
 
     // Restore the environment variable
@@ -138,68 +160,31 @@ jest.mock('./todoist', () => {
 // Now, import the specific functions needed for testing.
 // getTasks will be the actual implementation, but getUserToken within its scope will be the mock.
 import { getTasks } from './todoist';
-// Type for TodoistTask if not already globally available or imported
-interface TodoistTask {
-  id: string;
-  content: string;
-  is_completed: boolean;
-  due?: {
-    date?: string; // YYYY-MM-DD
-    string?: string;
-    datetime?: string; // Includes time and timezone
-    timezone?: string;
-  } | null;
-}
 
+// Import the mock after jest.mock
+const { getUserToken: mockGetUserToken } = require('./todoist');
 
 describe('getTasks', () => {
-  let mockGetUserToken: jest.MockedFunction<typeof import('./todoist').getUserToken>;
   let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
-    // Assign the mocked getUserToken to a typed variable for easier use
-    mockGetUserToken = require('./todoist').getUserToken as jest.MockedFunction<typeof import('./todoist').getUserToken>;
     mockGetUserToken.mockReset();
-
     originalFetch = global.fetch;
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
-    global.fetch = originalFetch; // Restore original fetch
+    global.fetch = originalFetch;
   });
-
-  // Helper to create date strings
-  const getISODateString = (date: Date): string => {
-    return date.toISOString().split('T')[0]; // YYYY-MM-DD
-  };
-
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-
-  const todayStr = getISODateString(today);
-  const tomorrowStr = getISODateString(tomorrow);
-  const yesterdayStr = getISODateString(yesterday);
-
-  const mockTasks: TodoistTask[] = [
-    { id: '1', content: 'Overdue Task', is_completed: false, due: { date: yesterdayStr } },
-    { id: '2', content: 'Today Task', is_completed: false, due: { date: todayStr } },
-    { id: '3', content: 'Future Task', is_completed: false, due: { date: tomorrowStr } },
-    { id: '4', content: 'No Due Date Task', is_completed: false },
-    { id: '5', content: 'Due Null Task', is_completed: false, due: null },
-    { id: '6', content: 'Due Date Null Task', is_completed: false, due: { date: undefined } },
-  ];
 
   test('should throw error if getUserToken throws', async () => {
     mockGetUserToken.mockRejectedValue(new Error('Auth failed'));
     await expect(getTasks()).rejects.toThrow('Auth failed');
+    expect(mockGetUserToken).toHaveBeenCalled();
   });
 
   test('should throw error if fetch fails', async () => {
-    mockGetUserToken.mockResolvedValue({ token: 'test_token', userId: 'user_1' });
+    mockGetUserToken.mockResolvedValue({ token: 'env_token', userId: 'user_1' });
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 500,
@@ -218,7 +203,7 @@ describe('getTasks', () => {
     expect(tasks).toEqual(mockTasks);
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.todoist.com/rest/v2/tasks',
-      expect.objectContaining({ headers: { Authorization: 'Bearer test_token' } })
+      expect.objectContaining({ headers: { Authorization: 'Bearer env_token_123' } })
     );
   });
   

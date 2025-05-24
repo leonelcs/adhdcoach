@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8
+    container_name: adhdcoach-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: adhd_coach
+      MYSQL_USER: adhdcoach
+      MYSQL_PASSWORD: My:S3cr3t
+    ports:
+      - "30306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
