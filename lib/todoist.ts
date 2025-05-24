@@ -33,8 +33,8 @@ export async function getUserToken() {
   return { token, userId: session.user.id };
 }
 
-export async function getTasks(): Promise<TodoistTask[]> {
-  console.log("LIB_TODOIST: getTasks called.");
+export async function getTasks(filter?: string): Promise<TodoistTask[]> {
+  console.log(`LIB_TODOIST: getTasks called with filter: ${filter}`);
   // Calls getUserToken which now fetches session internally
   const { token, userId } = await getUserToken(); 
   
@@ -55,6 +55,23 @@ export async function getTasks(): Promise<TodoistTask[]> {
   
   const tasks = await response.json();
   console.log("LIB_TODOIST: Successfully fetched tasks, count:", tasks.length);
+
+  if (filter === "active") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize today's date to compare only date part
+
+    const activeTasks = tasks.filter((task: TodoistTask) => {
+      if (!task.due || !task.due.date) {
+        return true; // Tasks without a due date are considered active
+      }
+      const dueDate = new Date(task.due.date);
+      return dueDate >= today; // Keep tasks with due date today or in the future
+    });
+    console.log(`LIB_TODOIST: Filtered for "active", returning ${activeTasks.length} of ${tasks.length} tasks.`);
+    return activeTasks;
+  }
+
+  console.log("LIB_TODOIST: No active filter or unknown filter, returning all fetched tasks.");
   return tasks;
 }
 

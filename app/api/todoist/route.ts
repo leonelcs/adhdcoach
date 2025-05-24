@@ -3,7 +3,7 @@ import { getTasks } from '@/lib/todoist';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -11,7 +11,9 @@ export async function GET() {
   }
 
   try {
-    const tasks = await getTasks(session);
+    const { searchParams } = new URL(request.url);
+    const filter = searchParams.get('filter');
+    const tasks = await getTasks(filter === null ? undefined : filter);
     return NextResponse.json(tasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);
