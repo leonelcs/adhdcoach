@@ -18,19 +18,12 @@ export async function POST(request: Request) {
     }
 
     // Store the token
-    // Assuming session.user.id exists and is the correct userId
     if (!session.user.id) {
       return NextResponse.json({ error: "User ID not found in session" }, { status: 500 });
     }
     await storeUserTodoistToken(session.user.id, token);
 
-    // Client-side code to connect to Todoist
-    await fetch('/api/connect-todoist', {
-      method: 'POST',
-      body: JSON.stringify({ token }),
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // This sends the session cookie
-    });
+    // ✅ No need to call fetch here!
 
     return NextResponse.json({ success: true });
   } catch (error) {

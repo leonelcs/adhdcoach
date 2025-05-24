@@ -29,9 +29,10 @@ interface TaskItemProps {
     };
   };
   onComplete: () => void;
+  completed: boolean;
 }
 
-export default function TaskItem({ task, onComplete }: TaskItemProps) {
+export default function TaskItem({ task, onComplete, completed }: TaskItemProps) {
   console.log('🔍 TaskItem rendered with task.id=', task.id);
 
   const priorityColor =
@@ -58,11 +59,18 @@ export default function TaskItem({ task, onComplete }: TaskItemProps) {
         onClick={handleComplete}
         className="mt-0.5 rounded-full border-2 border-gray-300 w-5 h-5 flex-shrink-0 hover:border-blue-500 transition-colors"
         aria-label="Complete task"
+        disabled={completed}
       />
 
       {/* Task content */}
       <div className="flex-grow min-w-0">
-        <div className="text-sm font-medium truncate">{task.content}</div>
+        <div
+          className={`text-sm font-medium truncate ${
+            completed ? 'line-through text-gray-400' : ''
+          }`}
+        >
+          {task.content}
+        </div>
 
         <div className="flex items-center mt-1 gap-2 text-xs">
           {/* Priority indicator */}
