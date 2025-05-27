@@ -8,6 +8,7 @@ interface Task {
   priority: number;
   due?: { date: string };
   is_completed: boolean; // Assuming this field comes from your API
+  parent_id?: string;
   // Add other task properties as needed
 }
 
@@ -69,11 +70,16 @@ export default function ClientTaskList({ tasks, loading }: ClientTaskListProps) 
     <div className="task-list">
       <h2 className="text-xl font-semibold mb-4">Your Tasks</h2>
       
-      {tasks.length > 0 ? (
+      {loading ? (
+        <div className="flex justify-center items-center py-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      ) : tasks.length > 0 ? (
         <TaskList 
           tasks={tasks} 
           onTaskComplete={handleTaskComplete} 
-          onBreakdown={handleBreakdown} 
+          onBreakdown={handleBreakdown}
+          parentId={null} // This ensures we only get root tasks
         />
       ) : (
         <p className="text-gray-500 text-center py-4">No tasks found</p>

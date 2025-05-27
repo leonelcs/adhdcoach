@@ -1,24 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { completeTaskClient } from '@/lib/todoistClient';
-import { CheckCircleIcon, ClockIcon } from '@heroicons/react/24/outline';
-
-// Priority color mapping (Todoist uses 1-4 with 4 being highest)
-const priorityColors = {
-  1: '#808080', // Normal - Gray
-  2: '#246FE0', // Medium - Blue
-  3: '#EB8909', // High - Orange
-  4: '#D1453B', // Urgent - Red
-};
-
-// Priority text labels
-const priorityLabels = {
-  1: 'Normal',
-  2: 'Medium',
-  3: 'High',
-  4: 'Urgent',
-};
+import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon } from '@heroicons/react/24/outline';
+import TaskList from './TaskList';
 
 interface Task {
   id: string;
@@ -28,6 +13,7 @@ interface Task {
   due?: {
     date: string;
   };
+  parent_id?: string; // Parent task ID for subtasks
   // Add other properties as needed
 }
 
@@ -36,16 +22,89 @@ interface TaskItemProps {
   onComplete: (taskId: string) => void; // Modified to accept taskId
   completed: boolean;
   onBreakdown: (taskId: string, taskContent: string) => void; // Added for AI breakdown
+  allTasks?: Task[]; // All tasks to identify subtasks
+  level?: number; // For indentation in recursive rendering
 }
 
-export default function TaskItem({ task, onComplete, completed, onBreakdown }: TaskItemProps) {
+export default function TaskItem({ task, onComplete, completed, onBreakdown, allTasks = [], level = 0 }: TaskItemProps) {
   console.log('🔍 TaskItem rendered with task.id=', task.id);
+
+  const [subtasks, setSubtasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [hasSubtasks, setHasSubtasks] = useState(false);
+
+  // Check if this task has any subtasks
+  useEffect(() => {
+    const childTasks = allTasks.filter(t => t.parent_id === task.id);
+    setHasSubtasks(childTasks.length > 0);
+  }, [allTasks, task.id]);
+
+  // Format due date if available
+  const dueDateDisplay = task.due?.date
+    ? new Date(task.due.date).toLocaleDateString()
+    : null;
+
+  // Priority color mapping (Todoist uses 1-4 with 4 being highest)
+  const priorityColors = {
+    1: '#808080', // Normal - Gray
+    2: '#246FE0', // Medium - Blue
+    3: '#EB8909', // High - Orange
+    4: '#D1453B', // Urgent - Red
+  };
+
+  // Priority text labels
+  const priorityLabels = {
+    1: 'Normal',
+    2: 'Medium',
+    3: 'High',
+    4: 'Urgent',
+  };
 
   const priorityColor =
     priorityColors[task.priority as keyof typeof priorityColors] ||
     priorityColors[1];
   const priorityLabel =
     priorityLabels[task.priority as keyof typeof priorityLabels] || 'Normal';
+
+  // Find subtasks from all tasks where parent_id matches current task id
+  useEffect(() => {
+    if (allTasks && allTasks.length > 0) {
+      const childTasks = allTasks.filter(t => t.parent_id === task.id);
+      setSubtasks(childTasks);
+    }
+  }, [allTasks, task.id]);
+
+  // Function to break down a task into subtasks using AI
+  const breakdownTask = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/ai/breakdown-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          taskContent: task.content,
+          parentId: task.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to break down task');
+      }
+
+      const data = await response.json();
+
+      // Update the subtasks with the newly created ones
+      setSubtasks(prev => [...prev, ...data.subtasks]);
+      setExpanded(true);
+    } catch (error) {
+      console.error('Error breaking down task:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleComplete = async () => {
     console.log('🖱️ TaskItem.handleComplete, sending up id=', task.id);
@@ -58,44 +117,29 @@ export default function TaskItem({ task, onComplete, completed, onBreakdown }: T
     }
   };
 
-  // Format due date if available
-  const dueDateDisplay = task.due?.date
-    ? new Date(task.due.date).toLocaleDateString()
-    : null;
+  const handleBreakdown = () => {
+    onBreakdown(task.id, task.content);
+    setExpanded(true); // Auto-expand after breakdown
+  };
 
   return (
-    <div className="border-b border-gray-200 p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors relative group">
-      {/* Checkbox */}
-      <button
-        onClick={handleComplete}
-        className="mt-0.5 rounded-full border-2 border-gray-300 w-5 h-5 flex-shrink-0 hover:border-blue-500 transition-colors"
-        aria-label="Complete task"
-        disabled={completed}
-      />
-
-      {/* Task content */}
-      <div className="flex-grow min-w-0">
-        <div
-          className={`text-sm font-medium truncate ${
-            completed ? 'line-through text-gray-400' : ''
-          }`}
-        >
-          {task.content}
+    <li className={`border rounded-md hover:bg-gray-50 ${level > 0 ? 'ml-6' : ''}`}>
+      <div className="flex items-start p-3">
+        {/* Checkbox */}
+        <div className="flex-shrink-0 mr-3">
+          <input
+            type="checkbox"
+            className="h-5 w-5 text-blue-600 rounded"
+            checked={task.completed}
+            readOnly
+          />
         </div>
 
-        <div className="flex items-center mt-1 gap-2 text-xs">
-          {/* Priority indicator */}
-          <span
-            className="px-2 py-0.5 rounded-full font-medium"
-            style={{
-              backgroundColor: `${priorityColor}20`, // 20% opacity
-              color: priorityColor,
-            }}
-          >
-            {priorityLabel}
-          </span>
-
-          {/* Due date if available */}
+        {/* Task content */}
+        <div className="flex-grow">
+          <p className={task.completed ? "line-through text-gray-500" : ""}>
+            {task.content}
+          </p>
           {dueDateDisplay && (
             <div className="flex items-center mt-1 text-sm text-gray-500">
               <ClockIcon className="h-4 w-4 mr-1" />
@@ -103,21 +147,49 @@ export default function TaskItem({ task, onComplete, completed, onBreakdown }: T
             </div>
           )}
         </div>
+
+        {/* Priority and breakdown button */}
+        <div className="flex items-center space-x-2">
+          {task.priority && task.priority < 4 && (
+            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${priorityColor}`}>
+              P{task.priority}
+            </span>
+          )}
+
+          {hasSubtasks ? (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-1 rounded hover:bg-gray-200"
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+            >
+              {expanded ?
+                <ChevronDownIcon className="h-5 w-5 text-gray-500" /> :
+                <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+              }
+            </button>
+          ) : (
+            <button
+              onClick={handleBreakdown}
+              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+              aria-label="Break down task"
+            >
+              {loading ? 'Breaking down...' : 'Break down'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* AI Breakdown Button - visible on hover */}
-      {!completed && (
-        <button
-          onClick={() => onBreakdown(task.id, task.content)}
-          className="absolute top-2 right-2 p-1 rounded-md bg-gray-100 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-blue-500"
-          title="AI Detailing"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L1.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.25 12L17 14.25l-1.25-2.25L13.5 11l2.25-1.25L17 7.5l1.25 2.25L20.5 11l-2.25 1.25z" />
-          </svg>
-          <span className="sr-only">AI Detailing</span>
-        </button>
+      {/* Subtasks section - only render if expanded */}
+      {expanded && hasSubtasks && (
+        <div className="pl-8 pr-3 pb-2 pt-1 bg-gray-50 border-t">
+          <TaskList
+            tasks={allTasks}
+            parentId={task.id}
+            onTaskComplete={onComplete}
+            onBreakdown={onBreakdown}
+          />
+        </div>
       )}
-    </div>
+    </li>
   );
 }
