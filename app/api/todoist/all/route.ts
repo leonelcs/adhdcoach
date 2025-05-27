@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     }));
 
     console.log("API: /api/todoist/all - Returning all tasks");
-    return NextResponse.json(tasksWithCompletionStatus);
+    // Make sure we're returning a proper NextResponse with tasks
+    return NextResponse.json(tasksWithCompletionStatus, { status: 200 });
   } catch (error) {
     console.error("API: /api/todoist/all - Error fetching tasks:", error);
     return NextResponse.json(

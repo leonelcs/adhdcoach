@@ -5,6 +5,21 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "./prisma";
 // Removed Session import as it's no longer a direct parameter for most functions here
 
+// Basic TodoistTask interface (expand as needed)
+interface TodoistTask {
+  id: string;
+  content: string;
+  due?: {
+    date?: string;
+    string?: string;
+    datetime?: string;
+    timezone?: string;
+  };
+  priority?: number;
+  parent_id?: string;
+  // Add other relevant fields from the Todoist API as needed
+}
+
 const TODOIST_API_BASE = 'https://api.todoist.com/rest/v2';
 
 // Helper to get the token for the current user by fetching session internally
@@ -97,23 +112,39 @@ export async function completeTask(taskId: string): Promise<void> {
   console.log("LIB_TODOIST: Task completed successfully via API for taskId:", taskId);
 }
 
-export async function createTask(content: string, dueString?: string, priority?: number): Promise<TodoistTask> {
-  console.log("LIB_TODOIST: createTask called with content:", content);
+export async function createTask(content: string, dueString?: string, priority?: number, parentId?: string): Promise<TodoistTask> {
+  console.log("LIB_TODOIST: createTask called with content:", content, "parentId:", parentId);
   // Calls getUserToken which now fetches session internally
   const { token, userId } = await getUserToken();
   
-  console.log("LIB_TODOIST: Creating task via Todoist API for user:", userId, "content:", content);
+  console.log("LIB_TODOIST: Creating task via Todoist API for user:", userId, "content:", content, "parentId:", parentId);
+  
+  const body: {
+    content: string;
+    due_string?: string;
+    priority?: number;
+    parent_id?: string;
+  } = {
+    content,
+  };
+
+  if (dueString) {
+    body.due_string = dueString;
+  }
+  if (priority) {
+    body.priority = priority;
+  }
+  if (parentId) {
+    body.parent_id = parentId;
+  }
+
   const response = await fetch(`${TODOIST_API_BASE}/tasks`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`
     },
-    body: JSON.stringify({
-      content,
-      due_string: dueString,
-      priority
-    })
+    body: JSON.stringify(body)
   });
   console.log("LIB_TODOIST: Todoist API create task response status:", response.status);
    if (!response.ok) {
