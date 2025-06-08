@@ -42,8 +42,12 @@ export async function getGeminiResponseWithHistory(messages: Array<{ role: strin
   }
 }
 
-export async function breakdownTask(taskContent: string): Promise<string[]> {
-  const prompt = `Break down the following task into smaller, actionable subtasks. Each subtask should be a short, clear instruction. Provide only the list of subtasks, one per line, with no numbering or bullet points. Task: "${taskContent}"`;
+export async function breakdownTask(taskContent: string, additionalDetails?: string): Promise<string[]> {
+  let prompt = `Break down the following task into smaller, actionable subtasks. Each subtask should be a short, clear instruction. Provide only the list of subtasks, one per line, with no numbering or bullet points. Task: "${taskContent}"`;
+  
+  if (additionalDetails && additionalDetails.trim()) {
+    prompt += `\n\nAdditional context and requirements: ${additionalDetails}`;
+  }
   
   try {
     const response = await getGeminiResponse(prompt);

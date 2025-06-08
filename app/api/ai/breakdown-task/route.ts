@@ -10,15 +10,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { taskContent, parentId } = await request.json();
+  const { taskContent, parentId, additionalDetails } = await request.json();
 
   if (!taskContent || !parentId) {
     return NextResponse.json({ error: 'Missing taskContent or parentId' }, { status: 400 });
   }
 
   try {
-    // Use the centralized service to break down the task
-    const subtasks = await breakdownTask(taskContent);
+    // Use the centralized service to break down the task with optional additional details
+    const subtasks = await breakdownTask(taskContent, additionalDetails);
 
     const createdSubtasks = [];
     for (const subtask of subtasks) {

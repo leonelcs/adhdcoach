@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { completeTaskClient } from '@/lib/todoistClient';
 import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon } from '@heroicons/react/24/outline';
 import TaskList from './TaskList';
+import TaskBreakdownModal from './TaskBreakdownModal';
 
 interface Task {
   id: string;
   content: string;
-  completed?: boolean;
-  priority?: number;
+  is_completed: boolean;
+  priority: number;
   due?: {
     date: string;
   };
@@ -20,24 +21,24 @@ interface Task {
 interface TaskItemProps {
   task: Task;
   onComplete: (taskId: string) => void; // Modified to accept taskId
-  completed: boolean;
   onBreakdown: (taskId: string, taskContent: string) => void; // Added for AI breakdown
   allTasks?: Task[]; // All tasks to identify subtasks
   level?: number; // For indentation in recursive rendering
 }
 
-export default function TaskItem({ task, onComplete, completed, onBreakdown, allTasks = [], level = 0 }: TaskItemProps) {
-  console.log('🔍 TaskItem rendered with task.id=', task.id);
-
-  const [subtasks, setSubtasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
+export default function TaskItem({ task, allTasks, onComplete, onBreakdown }: TaskItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [hasSubtasks, setHasSubtasks] = useState(false);
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Check if this task has any subtasks
   useEffect(() => {
-    const childTasks = allTasks.filter(t => t.parent_id === task.id);
-    setHasSubtasks(childTasks.length > 0);
+    if (allTasks) {
+      const childTasks = allTasks.filter(t => t.parent_id === task.id);
+      setHasSubtasks(childTasks.length > 0);
+    }
   }, [allTasks, task.id]);
 
   // Format due date if available
@@ -67,45 +68,6 @@ export default function TaskItem({ task, onComplete, completed, onBreakdown, all
   const priorityLabel =
     priorityLabels[task.priority as keyof typeof priorityLabels] || 'Normal';
 
-  // Find subtasks from all tasks where parent_id matches current task id
-  useEffect(() => {
-    if (allTasks && allTasks.length > 0) {
-      const childTasks = allTasks.filter(t => t.parent_id === task.id);
-      setSubtasks(childTasks);
-    }
-  }, [allTasks, task.id]);
-
-  // Function to break down a task into subtasks using AI
-  const breakdownTask = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/ai/breakdown-task', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          taskContent: task.content,
-          parentId: task.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to break down task');
-      }
-
-      const data = await response.json();
-
-      // Update the subtasks with the newly created ones
-      setSubtasks(prev => [...prev, ...data.subtasks]);
-      setExpanded(true);
-    } catch (error) {
-      console.error('Error breaking down task:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleComplete = async () => {
     console.log('🖱️ TaskItem.handleComplete, sending up id=', task.id);
     try {
@@ -117,79 +79,139 @@ export default function TaskItem({ task, onComplete, completed, onBreakdown, all
     }
   };
 
-  const handleBreakdown = () => {
-    onBreakdown(task.id, task.content);
-    setExpanded(true); // Auto-expand after breakdown
+  const handleBreakdownClick = () => {
+    setShowBreakdownModal(true);
+  };
+
+  const handleBreakdownSubmit = async (details: string) => {
+    setBreakdownLoading(true);
+    try {
+      await onBreakdown(task.id, task.content);
+      setExpanded(true); // Auto-expand after breakdown
+      setShowBreakdownModal(false);
+    } catch (error) {
+      console.error('Error in breakdown:', error);
+    } finally {
+      setBreakdownLoading(false);
+    }
   };
 
   return (
-    <li className={`border rounded-md hover:bg-gray-50 ${level > 0 ? 'ml-6' : ''}`}>
-      <div className="flex items-start p-3">
-        {/* Checkbox */}
-        <div className="flex-shrink-0 mr-3">
-          <input
-            type="checkbox"
-            className="h-5 w-5 text-blue-600 rounded"
-            checked={task.completed}
-            readOnly
-          />
+    <>
+      <li className="border rounded-md overflow-hidden mb-2 relative">
+        <div 
+          className="flex items-center p-3 bg-white hover:bg-gray-50"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          {/* Checkbox */}
+          <div className="flex-shrink-0 mr-3">
+            <input
+              type="checkbox"
+              className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+              checked={task.is_completed}
+              onChange={handleComplete}
+              disabled={task.is_completed}
+            />
+          </div>
+
+          {/* Task content */}
+          <div className="flex-grow">
+            <p className={task.is_completed ? "line-through text-gray-500" : ""}>
+              {task.content}
+            </p>
+            {dueDateDisplay && (
+              <div className="flex items-center mt-1 text-sm text-gray-500">
+                <ClockIcon className="h-4 w-4 mr-1" />
+                <span>{dueDateDisplay}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Priority and breakdown button */}
+          <div className="flex items-center space-x-2">
+            {task.priority && task.priority > 1 && (
+              <span 
+                className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white"
+                style={{ backgroundColor: priorityColor }}
+              >
+                P{task.priority}
+              </span>
+            )}
+
+            {hasSubtasks ? (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="p-1 rounded hover:bg-gray-200"
+                aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              >
+                {expanded ?
+                  <ChevronDownIcon className="h-5 w-5 text-gray-500" /> :
+                  <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+                }
+              </button>
+            ) : (
+              <button
+                onClick={handleBreakdownClick}
+                className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+                aria-label="Break down task"
+                disabled={breakdownLoading}
+              >
+                {breakdownLoading ? 'Breaking...' : 'Break down'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Task content */}
-        <div className="flex-grow">
-          <p className={task.completed ? "line-through text-gray-500" : ""}>
-            {task.content}
-          </p>
-          {dueDateDisplay && (
-            <div className="flex items-center mt-1 text-sm text-gray-500">
-              <ClockIcon className="h-4 w-4 mr-1" />
-              <span>{dueDateDisplay}</span>
+        {/* Tooltip que aparece no hover */}
+        {showTooltip && (
+          <div className="absolute top-full left-0 right-0 mt-1 p-3 bg-gray-900 text-white text-sm rounded-md shadow-lg z-10">
+            <div className="mb-2">
+              <span className="font-semibold">Task:</span> {task.content}
             </div>
-          )}
-        </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="bg-gray-700 px-2 py-1 rounded">
+                Priority: {priorityLabel}
+              </span>
+              {dueDateDisplay && (
+                <span className="bg-gray-700 px-2 py-1 rounded">
+                  Due: {dueDateDisplay}
+                </span>
+              )}
+              <span className="bg-gray-700 px-2 py-1 rounded">
+                Status: {task.is_completed ? 'Completed' : 'Active'}
+              </span>
+              {hasSubtasks && (
+                <span className="bg-gray-700 px-2 py-1 rounded">
+                  Has Subtasks
+                </span>
+              )}
+            </div>
+            {/* Seta do tooltip */}
+            <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+          </div>
+        )}
 
-        {/* Priority and breakdown button */}
-        <div className="flex items-center space-x-2">
-          {task.priority && task.priority < 4 && (
-            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${priorityColor}`}>
-              P{task.priority}
-            </span>
-          )}
+        {/* Subtasks section - only render if expanded */}
+        {expanded && hasSubtasks && allTasks && (
+          <div className="pl-8 pr-3 pb-2 pt-1 bg-gray-50 border-t">
+            <TaskList
+              tasks={allTasks}
+              parentId={task.id}
+              onTaskComplete={onComplete}
+              onBreakdown={onBreakdown}
+            />
+          </div>
+        )}
+      </li>
 
-          {hasSubtasks ? (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="p-1 rounded hover:bg-gray-200"
-              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
-            >
-              {expanded ?
-                <ChevronDownIcon className="h-5 w-5 text-gray-500" /> :
-                <ChevronRightIcon className="h-5 w-5 text-gray-500" />
-              }
-            </button>
-          ) : (
-            <button
-              onClick={handleBreakdown}
-              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
-              aria-label="Break down task"
-            >
-              {loading ? 'Breaking down...' : 'Break down'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Subtasks section - only render if expanded */}
-      {expanded && hasSubtasks && (
-        <div className="pl-8 pr-3 pb-2 pt-1 bg-gray-50 border-t">
-          <TaskList
-            tasks={allTasks}
-            parentId={task.id}
-            onTaskComplete={onComplete}
-            onBreakdown={onBreakdown}
-          />
-        </div>
-      )}
-    </li>
+      <TaskBreakdownModal
+        isOpen={showBreakdownModal}
+        onClose={() => setShowBreakdownModal(false)}
+        onSubmit={handleBreakdownSubmit}
+        taskContent={task.content}
+        loading={breakdownLoading}
+      />
+    </>
   );
 }

@@ -24,12 +24,12 @@ export async function GET(request: Request) {
     // we mark all active tasks as not completed
     const tasksWithCompletionStatus = activeTasks.map(task => ({
       ...task,
-      completed: false
+      is_completed: false
     }));
 
     console.log("API: /api/todoist/all - Returning all tasks");
-    // Make sure we're returning a proper NextResponse with tasks
-    return NextResponse.json(tasksWithCompletionStatus, { status: 200 });
+    // Return tasks in the expected format with tasks property
+    return NextResponse.json({ tasks: tasksWithCompletionStatus }, { status: 200 });
   } catch (error) {
     console.error("API: /api/todoist/all - Error fetching tasks:", error);
     return NextResponse.json(
